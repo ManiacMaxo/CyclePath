@@ -1,61 +1,32 @@
-version: '3.9'
-
 services:
-    neo4j:
-        image: neo4j
-        restart: unless-stopped
-        environment:
-            - NEO4J_AUTH=${NEO4J_USERNAME}/${NEO4J_PASSWORD}
-            - NEO4JLABS_PLUGINS=["graph-data-science", "apoc"]
-        volumes:
-            - neo4j_data:/data
-            - neo4j_logs:/logs
-            - neo4j_import:/var/lib/neo4j/import
-            - neo4j_plugins:/plugins
-    postgres:
-        image: postgres
-        restart: unless-stopped
-        environment:
-            POSTGRES_PASSWORD: ${PG_PASSWORD}
-            POSTGRES_USER: ${PG_USER}
-            POSTGRES_DB: ${PG_DB}
-            PGDATA: /var/lib/postgresql/data/pgdata
-        volumes:
-            - postgres_data:/var/lib/postgresql/data/pgdata
-            - postgres_logs:/logs
-    app:
-        # build: .
-        image: cyclepath
-        restart: unless-stopped
-        depends_on:
-            - neo4j
-            - postgres
-        ports:
-            - '5000:80'
-        environment:
-            - BASE_URL=/api
-            - AIR_QUALITY_KEY=${AIR_QUALITY_KEY}
-            - MAPS_KEY=${MAPS_KEY}
+  neo4j:
+    image: neo4j:2026.01
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:7474:7474
+      - 127.0.0.1:7687:7687
+    environment:
+      - NEO4J_AUTH=none
+      - NEO4J_PLUGINS=["graph-data-science", "apoc"]
+    volumes:
+      - neo4j_data:/data
+      - neo4j_import:/var/lib/neo4j/import
+      - neo4j_plugins:/plugins
 
-            - NEO4J_SCHEME=bolt
-            - NEO4J_HOST=neo4j
-            - NEO4J_PORT=7687
-            - NEO4J_USERNAME=${NEO4J_USERNAME}
-            - NEO4J_PASSWORD=${NEO4J_PASSWORD}
-
-            - PG_HOST=postgres
-            - PG_PORT=5432
-            - PG_USER=${PG_USER}
-            - PG_PASSWORD=${PG_PASSWORD}
-            - PG_DB=${PG_DB}
-
-            - ACCESS_TOKEN_SECRET=${ACCESS_TOKEN_SECRET}
-            - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET}
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:5432:5432
+    environment:
+      POSTGRES_DB: cyclepath
+      POSTGRES_USER: cyclepath
+      POSTGRES_PASSWORD: super_strong_password
+    volumes:
+      - postgres_data:/var/lib/postgresql
 
 volumes:
-    postgres_data:
-    postgres_logs:
-    neo4j_data:
-    neo4j_logs:
-    neo4j_import:
-    neo4j_plugins:
+  postgres_data:
+  neo4j_data:
+  neo4j_import:
+  neo4j_plugins:
