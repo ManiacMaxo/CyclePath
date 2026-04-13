@@ -1,7 +1,7 @@
 import { ArrowRight } from 'lucide-react'
 import { useState } from 'react'
-import useSWRMutation from 'swr/mutation'
 import { toast } from 'sonner'
+import useSWRMutation from 'swr/mutation'
 import { useLocation } from 'wouter'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,10 +15,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const { trigger, isMutating } = useSWRMutation(
     'auth/sign-in',
-    (
-      _: string,
-      { arg }: { arg: { email: string; password: string } },
-    ) => signIn(arg.email, arg.password),
+    (_: string, { arg }: { arg: { email: string; password: string } }) =>
+      signIn(arg.email, arg.password),
     {
       onSuccess: ({ token }) => {
         authSignIn(token)
@@ -26,9 +24,7 @@ export default function LoginPage() {
         navigate('/map')
       },
       onError: (err) => {
-        toast.error(
-          err instanceof Error ? err.message : 'Failed to sign in.',
-        )
+        toast.error(err instanceof Error ? err.message : 'Failed to sign in.')
       },
     },
   )

@@ -1,5 +1,5 @@
-import type { FormEvent } from 'react'
 import { Search, X } from 'lucide-react'
+import type { FormEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import useSWRMutation from 'swr/mutation'
 import { Button } from '@/components/ui/button'

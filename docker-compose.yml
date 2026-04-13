@@ -1,4 +1,48 @@
 services:
+  traefik:
+    image: traefik:v3
+    restart: unless-stopped
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "127.0.0.1:80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  server:
+    build: ./server
+    restart: unless-stopped
+    depends_on:
+      neo4j:
+        condition: service_started
+      postgres:
+        condition: service_started
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - DATABASE_URL=postgres://cyclepath:super_strong_password@postgres:5432/cyclepath?sslmode=disable
+      - ACCESS_TOKEN_SECRET=${ACCESS_TOKEN_SECRET}
+      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET}
+      - MAPS_KEY=${MAPS_KEY}
+      - AIR_QUALITY_KEY=${AIR_QUALITY_KEY}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=PathPrefix(`/api`)"
+      - "traefik.http.routers.api.priority=100"
+      - "traefik.http.routers.api.entrypoints=web"
+      - "traefik.http.services.api.loadbalancer.server.port=8080"
+
+  client:
+    build: ./client
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.app.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.app.priority=1"
+      - "traefik.http.routers.app.entrypoints=web"
+      - "traefik.http.services.app.loadbalancer.server.port=80"
+
   neo4j:
     image: neo4j:2026.01
     restart: unless-stopped

@@ -5,8 +5,8 @@ import { toast } from 'sonner'
 import useSWR, { mutate } from 'swr'
 import useSWRMutation from 'swr/mutation'
 import AirPollution from '@/components/map/air-pollution'
-import LongPressMarker from '@/components/map/long-press-marker'
 import LocationMarker from '@/components/map/location-marker'
+import LongPressMarker from '@/components/map/long-press-marker'
 import MapView from '@/components/map/map-view'
 import RatePopup from '@/components/map/rate-popup'
 import RouteLine from '@/components/map/route-line'
@@ -131,9 +131,8 @@ export default function MapPage() {
     ]
   }, [destination, state?.token, userPosition])
 
-  const { data: routes, isLoading: isLoadingRoutes } = useSWR<RoutesGetResponse>(
-    routesQueryKey,
-    () =>
+  const { data: routes, isLoading: isLoadingRoutes } =
+    useSWR<RoutesGetResponse>(routesQueryKey, () =>
       getRoutes(
         state!.token,
         userPosition![0],
@@ -141,7 +140,7 @@ export default function MapPage() {
         destination!.lat,
         destination!.lng,
       ),
-  )
+    )
 
   const activeSegments = useMemo(() => {
     if (!routes) {
@@ -158,7 +157,9 @@ export default function MapPage() {
 
     return [
       'pollution',
-      activeSegments.map((segment) => `${segment.start.id}-${segment.end.id}`).join(','),
+      activeSegments
+        .map((segment) => `${segment.start.id}-${segment.end.id}`)
+        .join(','),
     ]
   }, [activeSegments, showPollution, state?.token])
 
@@ -171,16 +172,16 @@ export default function MapPage() {
     }))
   }, [activeSegments])
 
-  const {
-    data: pollutionData,
-    isLoading: isLoadingPollution,
-  } = useSWR<AirPollutionResponse[]>(pollutionQueryKey, () =>
-    getAirPollution(state!.token, pollutionRequests),
-  )
+  const { data: pollutionData, isLoading: isLoadingPollution } = useSWR<
+    AirPollutionResponse[]
+  >(pollutionQueryKey, () => getAirPollution(state!.token, pollutionRequests))
 
   const { trigger: rateSegmentTrigger } = useSWRMutation(
     'rate-segment',
-    async (_key, { arg }: { arg: { segment: RouteSegment; rating: number } }) => {
+    async (
+      _key,
+      { arg }: { arg: { segment: RouteSegment; rating: number } },
+    ) => {
       const { segment, rating } = arg
       return rateSegment(state!.token, segment.start.id, segment.end.id, rating)
     },
@@ -223,10 +224,13 @@ export default function MapPage() {
 
     try {
       await rateSegmentTrigger({ segment: selectedSegment, rating })
-      toast.success(`You rated this segment ${rating} star${rating === 1 ? '' : 's'}`)
+      toast.success(
+        `You rated this segment ${rating} star${rating === 1 ? '' : 's'}`,
+      )
       setSelectedSegment(null)
       mutate(
-        (key) => typeof key === 'object' && Array.isArray(key) && key[0] === 'routes',
+        (key) =>
+          typeof key === 'object' && Array.isArray(key) && key[0] === 'routes',
         undefined,
         { revalidate: true },
       )

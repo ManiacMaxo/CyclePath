@@ -1,7 +1,7 @@
 import { ArrowRight } from 'lucide-react'
 import { useState } from 'react'
-import useSWRMutation from 'swr/mutation'
 import { toast } from 'sonner'
+import useSWRMutation from 'swr/mutation'
 import { useLocation } from 'wouter'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

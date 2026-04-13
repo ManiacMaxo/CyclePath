@@ -1,8 +1,8 @@
-import L from 'leaflet'
 import type { Marker as LeafletMarker } from 'leaflet'
+import L from 'leaflet'
+import { MapPin, Navigation } from 'lucide-react'
 import { useEffect, useMemo, useRef } from 'react'
 import { Marker, Popup } from 'react-leaflet'
-import { MapPin, Navigation } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 type LongPressMarkerProps = {
@@ -66,7 +66,12 @@ export default function LongPressMarker({
               <Navigation className='size-4' />
               Route here
             </Button>
-            <Button className='flex-1' onClick={onClear} size='sm' variant='ghost'>
+            <Button
+              className='flex-1'
+              onClick={onClear}
+              size='sm'
+              variant='ghost'
+            >
               Cancel
             </Button>
           </div>

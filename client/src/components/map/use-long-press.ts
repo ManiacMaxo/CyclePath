@@ -72,7 +72,9 @@ export function useLongPress(
         return
       }
 
-      if (containerPoint.distanceTo(pressState.startPoint) > movementThreshold) {
+      if (
+        containerPoint.distanceTo(pressState.startPoint) > movementThreshold
+      ) {
         pressState.moved = true
         clearTimer()
       }
@@ -90,7 +92,11 @@ export function useLongPress(
       pressState.startedAt = Date.now()
       pressState.startPoint = containerPoint
       pressState.timer = window.setTimeout(() => {
-        if (!pressState.isPointerDown || pressState.moved || !pressState.startPoint) {
+        if (
+          !pressState.isPointerDown ||
+          pressState.moved ||
+          !pressState.startPoint
+        ) {
           return
         }
 

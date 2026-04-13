@@ -1,0 +1,8 @@
+node_modules
+dist
+.env*
+*.local
+
+# local configuration files
+biome.json
+components.json

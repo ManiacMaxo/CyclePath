@@ -1,12 +1,12 @@
-import { Home, LogIn, MapIcon, User } from 'lucide-react'
-import { useLocation } from 'wouter'
+import { Home, LogIn, type LucideIcon, MapIcon, User } from 'lucide-react'
+import { Link, useLocation } from 'wouter'
 import { useAuth } from '@/context/auth'
 import { cn } from '@/lib/utils'
 
 type NavItem = {
   href: string
   label: string
-  icon: typeof Home
+  icon: LucideIcon
 }
 
 const AUTHENTICATED_ITEMS: NavItem[] = [
@@ -22,7 +22,7 @@ const GUEST_ITEMS: NavItem[] = [
 ]
 
 export function BottomNav() {
-  const [pathname, navigate] = useLocation()
+  const [pathname] = useLocation()
   const { isAuthenticated } = useAuth()
 
   const items = isAuthenticated ? AUTHENTICATED_ITEMS : GUEST_ITEMS
@@ -39,18 +39,18 @@ export function BottomNav() {
             href === '/' ? pathname === '/' : pathname.startsWith(href)
 
           return (
-            <button
+            <Link
               key={href}
+              to={href}
               className={cn(
                 'flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground',
                 isActive && 'text-primary',
               )}
-              onClick={() => navigate(href)}
               type='button'
             >
               <Icon className='size-5' />
               <span className='truncate'>{label}</span>
-            </button>
+            </Link>
           )
         })}
       </div>
