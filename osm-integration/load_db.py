@@ -42,6 +42,37 @@ def ensure_indexes(db: Graph):
     )
 
 
+def prune_hanging_nodes(db: Graph, batch_size: int = 50000):
+    initial = db.evaluate(
+        "MATCH (n:Node) WHERE NOT (n)-[:Route]-() RETURN count(n)"
+    )
+    initial = int(initial or 0)
+
+    if initial == 0:
+        print("no hanging nodes found")
+        return
+
+    deleted_total = 0
+    while True:
+        deleted = db.evaluate(
+            """
+            MATCH (n:Node)
+            WHERE NOT (n)-[:Route]-()
+            WITH n
+            LIMIT $batchSize
+            DELETE n
+            RETURN count(n)
+            """,
+            batchSize=batch_size,
+        )
+        deleted = int(deleted or 0)
+        if deleted == 0:
+            break
+        deleted_total += deleted
+
+    print(f"pruned hanging nodes: {deleted_total:,}")
+
+
 class FileHandler(osmium.SimpleHandler):
     def __init__(
         self,
@@ -212,6 +243,8 @@ def load(
     relation_batch: int = 5000,
     clear: bool = False,
     fast_edges: bool = False,
+    prune_hanging: bool = True,
+    prune_batch: int = 50000,
     progress_every: int = 200000,
 ):
     """load osm file into neo4j database
@@ -224,6 +257,10 @@ def load(
         clear (bool, optional): should database be cleared first. Defaults to False.
         fast_edges (bool, optional): insert edges with CREATE instead of MERGE.
         This is faster but may create duplicate Route relationships. Defaults to False.
+        prune_hanging (bool, optional): remove nodes without Route edges after import.
+        Defaults to True.
+        prune_batch (int, optional): batch size for hanging-node pruning.
+        Defaults to 50000.
         progress_every (int, optional): log progress every N inserted nodes/edges.
         Defaults to 200000.
     """
@@ -256,11 +293,15 @@ def load(
     print(f"node write time: {osm_handler.node_write_time / 60:.2f} minutes")
     print(f"relation write time: {osm_handler.edge_write_time / 60:.2f} minutes")
 
+    if prune_hanging:
+        print("pruning hanging nodes")
+        prune_hanging_nodes(db, batch_size=prune_batch)
+
     print("creating gds graph")
     db.run("CALL gds.graph.drop('nodesGraph', false)")
     db.run(
-        "CALL gds.graph.project( 'nodesGraph', 'Node', 'Route', "
-        "{ relationshipProperties: ['rating', 'cost', 'distance'] } )"
+        "CALL gds.graph.project( 'nodesGraph', 'Node', "
+        "{ Route: { orientation: 'UNDIRECTED', properties: ['rating', 'cost', 'distance'] } } )"
     )
 
     print(f"total time: {(time() - start_time) / 60:.2f} minutes")

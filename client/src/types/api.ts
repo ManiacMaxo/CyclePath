@@ -61,3 +61,20 @@ export type ErrorResponse = {
   message: string
   error?: string
 }
+
+export type DebugGraphNode = {
+  id: number
+  lat: number
+  long: number
+}
+
+export type DebugGraphEdge = {
+  start_node_id: number
+  end_node_id: number
+  rating: number
+}
+
+export type DebugGraphResponse = {
+  nodes: DebugGraphNode[]
+  edges: DebugGraphEdge[]
+}

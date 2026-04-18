@@ -84,3 +84,20 @@ type AirPollutionResponse struct {
 	MeasurementTime string  `json:"measurementTime"`
 	PollutionIndex  float64 `json:"pollutionIndex"`
 }
+
+type DebugGraphNode struct {
+	ID   uint64  `json:"id"`
+	Lat  float64 `json:"lat"`
+	Long float64 `json:"long"`
+}
+
+type DebugGraphEdge struct {
+	StartNodeID uint64  `json:"start_node_id"`
+	EndNodeID   uint64  `json:"end_node_id"`
+	Rating      float32 `json:"rating"`
+}
+
+type DebugGraphResponse struct {
+	Nodes []DebugGraphNode `json:"nodes"`
+	Edges []DebugGraphEdge `json:"edges"`
+}

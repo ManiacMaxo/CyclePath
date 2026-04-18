@@ -1,6 +1,6 @@
-import { Navigation, Route, Wind } from 'lucide-react'
+import { Navigation, Network, Route, Wind } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { Marker, Popup, useMap } from 'react-leaflet'
+import { Marker, Popup, useMap, useMapEvents } from 'react-leaflet'
 import { toast } from 'sonner'
 import useSWR, { mutate } from 'swr'
 import useSWRMutation from 'swr/mutation'
@@ -10,15 +10,17 @@ import LongPressMarker from '@/components/map/long-press-marker'
 import MapView from '@/components/map/map-view'
 import RatePopup from '@/components/map/rate-popup'
 import RouteLine from '@/components/map/route-line'
+import DebugGraphOverlay from '@/components/map/debug-graph-overlay'
 import SearchBar from '@/components/map/search-bar'
 import { useLongPress } from '@/components/map/use-long-press'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { useAuthRedirect } from '@/hooks/use-auth'
-import { getAirPollution, getRoutes, rateSegment } from '@/lib/api'
+import { getAirPollution, getDebugGraph, getRoutes, rateSegment } from '@/lib/api'
 import type {
   AirPollutionRequest,
   AirPollutionResponse,
+  DebugGraphResponse,
   RouteSegment,
   RoutesGetResponse,
   SearchLocation,
@@ -79,6 +81,32 @@ function LongPressHandler({
   return null
 }
 
+function MapBoundsTracker({
+  onBoundsChange,
+}: {
+  onBoundsChange: (bounds: [[number, number], [number, number]] | null) => void
+}) {
+  const map = useMapEvents({
+    moveend: () => {
+      const b = map.getBounds()
+      onBoundsChange([
+        [b.getSouth(), b.getWest()],
+        [b.getNorth(), b.getEast()],
+      ])
+    },
+  })
+
+  useEffect(() => {
+    const b = map.getBounds()
+    onBoundsChange([
+      [b.getSouth(), b.getWest()],
+      [b.getNorth(), b.getEast()],
+    ])
+  }, [map, onBoundsChange])
+
+  return null
+}
+
 export default function MapPage() {
   const { state } = useAuthRedirect()
   const [userPosition, setUserPosition] = useState<[number, number] | null>(
@@ -96,6 +124,33 @@ export default function MapPage() {
   const [longPressPosition, setLongPressPosition] = useState<
     [number, number] | null
   >(null)
+  const [showGraph, setShowGraph] = useState(false)
+  const [mapBounds, setMapBounds] = useState<
+    [[number, number], [number, number]] | null
+  >(null)
+  const [debouncedBounds, setDebouncedBounds] = useState<
+    [[number, number], [number, number]] | null
+  >(null)
+
+  useEffect(() => {
+    if (!mapBounds) return
+    const timer = setTimeout(() => setDebouncedBounds(mapBounds), 500)
+    return () => clearTimeout(timer)
+  }, [mapBounds])
+
+  const graphQueryKey = useMemo(() => {
+    if (!showGraph || !import.meta.env.DEV || !state?.token || !debouncedBounds) {
+      return null
+    }
+    const [[minLat, minLng], [maxLat, maxLng]] = debouncedBounds
+    return ['debug-graph', minLat, minLng, maxLat, maxLng]
+  }, [showGraph, state?.token, debouncedBounds])
+
+  const { data: graphData, isLoading: isLoadingGraph } =
+    useSWR<DebugGraphResponse>(graphQueryKey, () => {
+      const [[minLat, minLng], [maxLat, maxLng]] = debouncedBounds!
+      return getDebugGraph(state!.token, minLat, maxLat, minLng, maxLng)
+    })
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -240,7 +295,7 @@ export default function MapPage() {
   }
 
   return (
-    <div className='relative h-dvh w-full overflow-hidden bg-muted'>
+    <div className='relative h-[calc(100dvh-60px-env(safe-area-inset-bottom))] w-full overflow-hidden bg-muted'>
       <MapView>
         <MapViewport
           center={userPosition}
@@ -250,6 +305,9 @@ export default function MapPage() {
           onLongPress={handleLongPress}
           onShortClick={handleLongPressClear}
         />
+        {import.meta.env.DEV ? (
+          <MapBoundsTracker onBoundsChange={setMapBounds} />
+        ) : null}
         <UserPositionMarker position={userPosition} />
         <LocationMarker
           end={destination ? [destination.lat, destination.lng] : null}
@@ -273,6 +331,13 @@ export default function MapPage() {
 
         {showPollution ? (
           <AirPollution data={pollutionData ?? []} segments={activeSegments} />
+        ) : null}
+
+        {showGraph && graphData ? (
+          <DebugGraphOverlay
+            edges={graphData.edges}
+            nodes={graphData.nodes}
+          />
         ) : null}
 
         <LongPressMarker
@@ -325,6 +390,19 @@ export default function MapPage() {
           {!isLoadingPollution ? <Wind className='size-4' /> : null}
           {showPollution ? 'Hide AQI' : 'Show AQI'}
         </Button>
+
+        {import.meta.env.DEV ? (
+          <Button
+            className='pointer-events-auto rounded-full bg-background/96 px-4 shadow-lg backdrop-blur'
+            loading={isLoadingGraph}
+            onClick={() => setShowGraph((currentValue) => !currentValue)}
+            size='sm'
+            variant={showGraph ? 'default' : 'outline'}
+          >
+            {!isLoadingGraph ? <Network className='size-4' /> : null}
+            {showGraph ? 'Hide Graph' : 'Debug Graph'}
+          </Button>
+        ) : null}
       </div>
 
       {!userPosition ? (

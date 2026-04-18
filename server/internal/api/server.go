@@ -16,6 +16,7 @@ import (
 
 type GraphService interface {
 	FindNearestNode(ctx context.Context, lat, lng float64) (uint64, error)
+	GetAllNodesEdges(ctx context.Context, minLat, maxLat, minLng, maxLng float64) (nodes []service.Node, edges []service.Edge, err error)
 	ShortestPath(ctx context.Context, start, end uint64, criteria string) ([]service.Segment, error)
 }
 
@@ -116,6 +117,7 @@ func (s *Server) setup() {
 
 			r.Get("/search", s.search)
 
+			r.Get("/debug/graph", s.debugGraph)
 			r.Get("/routes", s.getRoutes)
 			r.Post("/routes/rate", s.rateRoute)
 			r.Post("/routes/air-pollution", s.airPollution)

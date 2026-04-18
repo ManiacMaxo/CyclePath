@@ -115,6 +115,51 @@ func (s *Server) getRoutes(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+func (s *Server) debugGraph(w http.ResponseWriter, r *http.Request) {
+	log := hlog.FromRequest(r)
+
+	q := r.URL.Query()
+	minLat, _ := strconv.ParseFloat(q.Get("minLat"), 64)
+	maxLat, _ := strconv.ParseFloat(q.Get("maxLat"), 64)
+	minLng, _ := strconv.ParseFloat(q.Get("minLng"), 64)
+	maxLng, _ := strconv.ParseFloat(q.Get("maxLng"), 64)
+
+	if minLat == 0 && maxLat == 0 && minLng == 0 && maxLng == 0 {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "bounding box params required: minLat, maxLat, minLng, maxLng")
+		return
+	}
+
+	nodes, edges, err := s.gs.GetAllNodesEdges(r.Context(), minLat, maxLat, minLng, maxLng)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to fetch debug graph")
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to fetch debug graph")
+		return
+	}
+
+	respNodes := make([]DebugGraphNode, len(nodes))
+	for i, node := range nodes {
+		respNodes[i] = DebugGraphNode{
+			ID:   node.NodeID,
+			Lat:  node.Lat,
+			Long: node.Lng,
+		}
+	}
+
+	respEdges := make([]DebugGraphEdge, len(edges))
+	for i, edge := range edges {
+		respEdges[i] = DebugGraphEdge{
+			StartNodeID: edge.StartNodeID,
+			EndNodeID:   edge.EndNodeID,
+			Rating:      edge.Rating,
+		}
+	}
+
+	writeJSON(w, http.StatusOK, DebugGraphResponse{
+		Nodes: respNodes,
+		Edges: respEdges,
+	})
+}
+
 func convertPath(path []service.Segment) []RouteSegment {
 	segments := make([]RouteSegment, len(path))
 	for i, s := range path {

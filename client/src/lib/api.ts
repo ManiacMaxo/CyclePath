@@ -4,6 +4,7 @@ import type {
   AuthSignInRequest,
   AuthSignUpRequest,
   AuthTokenResponse,
+  DebugGraphResponse,
   ErrorResponse,
   RoutesGetResponse,
   RoutesRateRequest,
@@ -178,6 +179,25 @@ export function rateSegment(
   return apiFetch<void>('/api/routes/rate', {
     method: 'POST',
     body,
+    getToken: () => token,
+  })
+}
+
+export function getDebugGraph(
+  token: string,
+  minLat: number,
+  maxLat: number,
+  minLng: number,
+  maxLng: number,
+) {
+  const searchParams = new URLSearchParams({
+    minLat: String(minLat),
+    maxLat: String(maxLat),
+    minLng: String(minLng),
+    maxLng: String(maxLng),
+  })
+
+  return apiFetch<DebugGraphResponse>(`/api/debug/graph?${searchParams.toString()}`, {
     getToken: () => token,
   })
 }

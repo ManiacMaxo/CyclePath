@@ -20,19 +20,20 @@ const SHORTEST_PATH_QUERY = `MATCH
     (startNode:Node {node_id: $startNodeId}),
     (endNode:Node {node_id: $endNodeId})
 CALL gds.shortestPath.dijkstra.stream('nodesGraph', {
-    sourceNode: startNode,
-    targetNode: endNode,
+    sourceNode: id(startNode),
+    targetNode: id(endNode),
     relationshipWeightProperty: $criteria
 })
 YIELD nodeIds, costs, path
 WITH nodeIds, costs, nodes(path) AS pathNodes
 UNWIND range(0, size(nodeIds) - 2) AS i
-OPTIONAL MATCH (a:Node {node_id: nodeIds[i]})-[r:Route]->(b:Node {node_id: nodeIds[i + 1]})
+OPTIONAL MATCH (a:Node)-[r:Route]-(b:Node)
+WHERE id(a) = nodeIds[i] AND id(b) = nodeIds[i + 1]
 WITH i, nodeIds, costs, pathNodes, coalesce(avg(r.rating), 4.0) AS rating
 RETURN
-    nodeIds[i] AS startNodeId,
+    pathNodes[i].node_id AS startNodeId,
     pathNodes[i].location AS startLocation,
-    nodeIds[i + 1] AS endNodeId,
+    pathNodes[i + 1].node_id AS endNodeId,
     pathNodes[i + 1].location AS endLocation,
     toFloat(costs[i + 1] - costs[i]) AS cost,
     rating AS rating
@@ -41,6 +42,7 @@ ORDER BY i`
 const FIND_NEAREST_NODE_QUERY = `MATCH (n:Node)
 WHERE
     n.location IS NOT NULL
+    AND (n)-[:Route]-()
     AND point.withinBBox(
         n.location,
         point({latitude: $minLat, longitude: $minLng}),
@@ -56,6 +58,28 @@ RETURN n.node_id AS nodeId
 ORDER BY dist ASC
 LIMIT 1`
 
+const GET_ALL_NODES_QUERY = `MATCH (n:Node)
+WHERE n.location IS NOT NULL
+  AND point.withinBBox(
+    n.location,
+    point({latitude: $minLat, longitude: $minLng}),
+    point({latitude: $maxLat, longitude: $maxLng})
+  )
+RETURN n.node_id AS nodeId, n.location AS location`
+
+const GET_ALL_EDGES_QUERY = `MATCH (a:Node)-[r:Route]->(b:Node)
+WHERE point.withinBBox(
+    a.location,
+    point({latitude: $minLat, longitude: $minLng}),
+    point({latitude: $maxLat, longitude: $maxLng})
+  )
+  AND point.withinBBox(
+    b.location,
+    point({latitude: $minLat, longitude: $minLng}),
+    point({latitude: $maxLat, longitude: $maxLng})
+  )
+RETURN a.node_id AS startNodeId, b.node_id AS endNodeId, avg(r.rating) AS rating`
+
 var nearestNodeSearchRadiiMeters = [...]float64{50, 100, 250, 500, 1000, 2000}
 
 const metersPerDegreeLat = 111_320.0
@@ -64,6 +88,12 @@ type Node struct {
 	Lat    float64 `json:"lat"`
 	Lng    float64 `json:"lng"`
 	NodeID uint64  `json:"id"`
+}
+
+type Edge struct {
+	StartNodeID uint64  `json:"start_node_id"`
+	EndNodeID   uint64  `json:"end_node_id"`
+	Rating      float32 `json:"rating"`
 }
 
 type Segment struct {
@@ -263,6 +293,97 @@ func (gs *GraphService) FindNearestNode(ctx context.Context, lat, lng float64) (
 	}
 
 	return 0, fmt.Errorf("no nearby node found within %.0fm", nearestNodeSearchRadiiMeters[len(nearestNodeSearchRadiiMeters)-1])
+}
+
+func (gs *GraphService) GetAllNodesEdges(ctx context.Context, minLat, maxLat, minLng, maxLng float64) ([]Node, []Edge, error) {
+	nodesSession := gs.db.NewSession(ctx, neo4j.SessionConfig{})
+	defer func() { _ = nodesSession.Close(ctx) }()
+
+	params := map[string]any{
+		"minLat": minLat,
+		"maxLat": maxLat,
+		"minLng": minLng,
+		"maxLng": maxLng,
+	}
+
+	nodesResult, err := nodesSession.Run(ctx, GET_ALL_NODES_QUERY, params)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to execute nodes query: %w", err)
+	}
+
+	nodeRecords, err := nodesResult.Collect(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to collect nodes: %w", err)
+	}
+
+	nodes := make([]Node, 0, len(nodeRecords))
+	for _, rec := range nodeRecords {
+		rawNodeID, ok := rec.Get("nodeId")
+		if !ok {
+			return nil, nil, fmt.Errorf("nodes query did not return nodeId")
+		}
+		rawLocation, ok := rec.Get("location")
+		if !ok {
+			return nil, nil, fmt.Errorf("nodes query did not return location")
+		}
+
+		nodeID, err := toUint64(rawNodeID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid nodeId: %w", err)
+		}
+		lat, lng, err := pointToLatLng(rawLocation)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid location: %w", err)
+		}
+
+		nodes = append(nodes, Node{Lat: lat, Lng: lng, NodeID: nodeID})
+	}
+
+	edgesSession := gs.db.NewSession(ctx, neo4j.SessionConfig{})
+	defer func() { _ = edgesSession.Close(ctx) }()
+
+	edgesResult, err := edgesSession.Run(ctx, GET_ALL_EDGES_QUERY, params)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to execute edges query: %w", err)
+	}
+
+	edgeRecords, err := edgesResult.Collect(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to collect edges: %w", err)
+	}
+
+	edges := make([]Edge, 0, len(edgeRecords))
+	for _, rec := range edgeRecords {
+		rawStartNodeID, ok := rec.Get("startNodeId")
+		if !ok {
+			return nil, nil, fmt.Errorf("edges query did not return startNodeId")
+		}
+		rawEndNodeID, ok := rec.Get("endNodeId")
+		if !ok {
+			return nil, nil, fmt.Errorf("edges query did not return endNodeId")
+		}
+		rawRating, ok := rec.Get("rating")
+		if !ok {
+			return nil, nil, fmt.Errorf("edges query did not return rating")
+		}
+
+		startNodeID, err := toUint64(rawStartNodeID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid startNodeId: %w", err)
+		}
+		endNodeID, err := toUint64(rawEndNodeID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid endNodeId: %w", err)
+		}
+		rating, err := toFloat32(rawRating)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid rating: %w", err)
+		}
+
+		edges = append(edges, Edge{StartNodeID: startNodeID, EndNodeID: endNodeID, Rating: rating})
+	}
+
+	return nodes, edges, nil
 }
 
 func calculateBoundingBox(lat, lng, radiusMeters float64) (minLat, maxLat, minLng, maxLng float64) {
